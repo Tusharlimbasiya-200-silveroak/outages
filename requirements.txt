@@ -14,7 +14,6 @@ html5lib==1.1
 idna==3.4
 lxml==4.9.2
 mysql-connector-python==8.0.32
-mysqlclient==2.1.1
 numpy==1.24.2
 outcome==1.2.0
 packaging==23.0
@@ -41,3 +40,4 @@ webdriver-manager==3.8.6
 webencodings==0.5.1
 websockets==10.4
 wsproto==1.2.0
+mysqlclient==2.1.1

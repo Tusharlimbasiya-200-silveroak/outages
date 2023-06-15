@@ -136,8 +136,8 @@ try:
 
 except Exception as e:
     error = True
-    error_msg += 'Unable to extract data from the URL: {0}: {1}'.format(FILE_NAME_FORMAT, e)
-    logger.error("Unable to extract data from the URL: {0}: {1}".format(FILE_NAME_FORMAT, e))
+    error_msg += 'Unable to extract data from the URL: {0}: {1}'.format(WESTERNPOWER_URL, e)
+    logger.error("Unable to extract data from the URL: {0}: {1}".format(WESTERNPOWER_URL, e))
 
 from helpers.notifications import send_email_notification_of_failure as notify
 from helpers.connection import add_extraction_source_details as conn

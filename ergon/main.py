@@ -31,7 +31,7 @@ API_DOWNLOADS_DESINATION_FILE = API_DOWNLOADS_DESINATION + FILE_NAME_FORMAT + '.
 
 LOGS_FILE = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/logs/ergon.log'
 
-error = error_msg = None
+error = error_msg = ''
 
 logging.basicConfig(filename=LOGS_FILE,
                     filemode='a',
@@ -78,7 +78,6 @@ try:
     driver.get(ERGON_URL)
     driver.implicitly_wait(15)
 
-
     data_table = driver.find_elements(By.XPATH, '//ul[@class="results"]/child::li')
     if len(data_table) > 0:
         outages = []
@@ -87,6 +86,7 @@ try:
             out = []
             try:
                 check_if_arrow_closed = data.find_element(By.CLASS_NAME, 'arrow-closed')
+                logger.info("hhhhhhhhhhhhhhhhh {0}".format(check_if_arrow_closed))
                 if check_if_arrow_closed:
                     check_if_arrow_closed.click()
             except Exception as e:
@@ -145,8 +145,8 @@ try:
 
 except Exception as e:
     error = True
-    error_msg += 'Couldn\'t scrape the data: {0}: {1}'.format(FILE_NAME_FORMAT, e)
-    logger.error("Couldn't scrape the data: {0}: {1}".format(FILE_NAME_FORMAT, e))
+    error_msg += 'Couldn\'t scrape the data: {0}: {1}'.format(ERGON_URL, e)
+    logger.error("Couldn't scrape the data: {0}: {1}".format(ERGON_URL, e))
 
 from helpers.notifications import send_email_notification_of_failure as notify
 from helpers.connection import add_extraction_source_details as conn
