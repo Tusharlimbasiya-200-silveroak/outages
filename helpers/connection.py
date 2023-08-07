@@ -158,7 +158,7 @@ def extract_csv_data(data,name):
                     "utime": datetime.now()
                 }
                 
-                if doc['pid'] == 'evoenergy':
+                if doc['pid'] == 'evoenergy' and doc['pid'] == "aemo":
                     print('hh')
                     for rows in data[index + 1:]:
                         if rows.get('oid') == doc['oid']:
