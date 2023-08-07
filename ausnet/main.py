@@ -73,7 +73,7 @@ if not os.path.exists(API_DOWNLOADS_DESINATION):
 csv_headers = ['Types','status','Towns impacted','Outage time','Estimated time of restoration','Reason','Customers impacted','Incident number']
 
 options = Options()
-options.add_argumeznt("--headless")
+options.add_argument("--headless")
 options.add_argument("--window-size=1920,1200")
 try:
     data_frames_list = [] 
