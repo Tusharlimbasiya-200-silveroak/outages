@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 
-from webdriver_manager.chrome import ChromeDriverManager 
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
 
 import undetected_chromedriver as uc
@@ -70,44 +70,18 @@ if not os.path.exists(API_DOWNLOADS_DESINATION):
         error_msg += 'Unable to create API directory on server: {0}'.format(API_DOWNLOADS_DESINATION)
         logger.error("2ERR. Error creating API directory: {0}: {1}".format(API_DOWNLOADS_DESINATION, e))
 
-def check_if_element_exists(data=None, byxpath=None, byclass=None, check_parent=False):
-    if byxpath:
-        txt = None
-        try:
-            if check_parent:
-                try:
-                    txt = data.find_element(By.XPATH, byxpath)
-                    if txt:
-                        parent_txt = txt.find_element(By.XPATH, "..").text
-                        txt = parent_txt.split(':')[1].strip()
-                    else:
-                        txt = None
-                except NoSuchElementException as e:
-                    txt = None
-            else:
-                txt = data.find_element(By.XPATH, byxpath).text
-        except NoSuchElementException as e:
-            return None
-        return txt
-    else:
-        try:
-            txt = data.find_element(By.CLASS_NAME, byclass).text
-        except NoSuchElementException as e:
-            return None
-        return txt
-    
-try:
 
+try:
     options = Options()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     options.add_argument("--window-size=1920,1200")
 
     driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
-    # driver = uc.Chrome(options=options) # need to use this special one to bypass the clouflare robot check
     driver.get(UNITEDENERGY_URL)
     delay = 15
 
     elem = WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.XPATH, '//span[contains(@class,"OutageListItem-module--suburb")]')))
+
     if elem:
         data_table = driver.find_elements(By.XPATH, '//div[contains(@class,"OutageListItem-module--root")]')
         if len(data_table) > 0:
@@ -116,17 +90,27 @@ try:
             for outage in data_table:
                 outage_type_text = affected_suburbs_text = location_text = estimated_restoration_time_text = customers_affected_text = customers_affected_text = cause_text = None
                 out = []
-                outage_type_text = check_if_element_exists(outage, byxpath='//span[contains(@class,"OutageListItem-module--unplannedLabel")]')    
-                affected_suburbs_text = check_if_element_exists(outage, byxpath='//span[contains(@class,"OutageListItem-module--suburb")]')
-                location_text = check_if_element_exists(outage, byxpath='//span[contains(text(),"Fault location")]', check_parent=True)
-                estimated_restoration_time_text = check_if_element_exists(outage, byxpath='//span[contains(text(),"restoration")]', check_parent= True)
-                customers_affected_text = check_if_element_exists(outage, byxpath='//span[contains(text(),"affected")]', check_parent= True)
-                cause_text = check_if_element_exists(outage, byxpath='//span[contains(text(),"Cause")]', check_parent= True)
-                out.extend([outage_type_text,affected_suburbs_text,location_text,estimated_restoration_time_text, customers_affected_text,cause_text])
+                try:
+                    planned_label_element = driver.find_element(By.XPATH, './/span[contains(@class,"OutageListItem-module--plannedLabel")]')
+                    outage_type_text = planned_label_element.text
+                except NoSuchElementException:
+                    try:
+                        unplanned_label_element = driver.find_element(By.XPATH, './/span[contains(@class,"OutageListItem-module--unplannedLabel")]')
+                        outage_type_text = unplanned_label_element.text
+                    except NoSuchElementException:
+                        outage_type_text = None
+                affected_suburbs_text = outage.find_element(By.XPATH, './/span[contains(@class,"OutageListItem-module--suburb")]').text
+                location_text = outage.find_element(By.XPATH, './/span[contains(text(),"Fault location")]/..').text.split(':')[1].strip()
+                estimated_restoration_time_text = outage.find_element(By.XPATH, './/span[contains(text(),"restoration")]/..').text.split(':')[1].strip()
+                customers_affected_text = outage.find_element(By.XPATH, './/span[contains(text(),"affected")]/..').text.split(':')[1].strip()
+                cause_text = outage.find_element(By.XPATH, './/span[contains(text(),"Cause")]/..').text.split(':')[1].strip()
+                out.extend([outage_type_text, affected_suburbs_text, location_text, estimated_restoration_time_text, customers_affected_text, cause_text])
                 outages.append(out)
             try:
                 df = pd.DataFrame(outages, columns = columns)
-                df.to_csv(DOWNLOAD_UNITEDENERGY_FILE_DESTINATION, encoding='utf-8')
+                df2 = df.rename(columns={'outage_type':'otype','affected_suburbs':'suburb','estimated_restoration_time':'o_res_time','customers_affected':'affected_cust','location':'area','cause':'reason'},inplace=False)
+                unitendenergy_data = df2.to_dict(orient="records")
+                df2.to_csv(DOWNLOAD_UNITEDENERGY_FILE_DESTINATION, encoding='utf-8')
                 logger.info("Successfully written extracted data to CSV file: {0}".format(DOWNLOAD_UNITEDENERGY_FILE_DESTINATION))
             except Exception as e:
                 error = True
@@ -137,23 +121,34 @@ try:
                 if len(f) > 0:
                     for fr in f:
                         if fnmatch(fr, FILE_NAME_FORMAT + '*'):
-                            shutil.copy(os.path.join(r, fr),API_DOWNLOADS_DESINATION_FILE)
+                            shutil.copy(os.path.join(r, fr), API_DOWNLOADS_DESINATION_FILE)
             logger.info("Successfully written file for API delivery: {0}".format(API_DOWNLOADS_DESINATION_FILE))
         else:
             logger.info("Looks like no outages found: {0}".format(FILE_NAME_FORMAT))
-            
+
     else:
         logger.info("Looks like no outages found: {0}".format(FILE_NAME_FORMAT))
 except Exception as e:
     error = True
-    error_msg += 'Unable to extract data from url: {0}: {1}'.format(UNITEDENERGY_URL, e)
-    logger.error("Unable to extract data from url: {0}: {1}".format(UNITEDENERGY_URL, e))
+    error_msg += 'Unable to extract data from URL: {0}: {1}'.format(UNITEDENERGY_URL, e)
+    logger.error("Unable to extract data from URL: {0}: {1}".format(UNITEDENERGY_URL, e))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='unitedenergy', source_url=UNITEDENERGY_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='unitedenergy', source_url=UNITEDENERGY_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='unitedenergy', source_url=UNITEDENERGY_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_data(data=unitendenergy_data,name="unitedenergy")
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))
+
+
+
+
+

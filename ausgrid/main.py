@@ -5,7 +5,7 @@ import os
 import shutil
 from fnmatch import fnmatch
 import logging
-
+import pandas as pd
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_FOLDER = ROOT_DIR + '/downloads/'
 FILE_NAME_FORMAT = datetime.now().strftime("%Y-%m-%d-%H%M%S-ausgrid-outage")
@@ -99,7 +99,7 @@ try:
                     'Status']
 
     f_content = array_to_csv_line(f_headers_arr)
-
+    ausgrid = []
     for d in response_data:
         tStartDate = str_to_date_time(d['StartDateTime'])
         tEndDate = str_to_date_time(d['EndDateTime'])
@@ -114,7 +114,16 @@ try:
         oArr = [oDate, oStEt, oApf, oRef, oStreets, oReason, oCustomers, oStatus]
         f_content += '\n'
         f_content += array_to_csv_line(oArr)
+        # print(f_content,'lll')
+        ausgrid.append(oArr)
     try: 
+        # print(ausgrid)
+        df = pd.DataFrame(ausgrid,columns=f_headers_arr)
+        df[['ostart_time', 'o_res_time']] = df['Start / Finish'].apply(lambda x: pd.Series(str(x).split("-")))
+        df.drop('Start / Finish', axis=1, inplace=True)
+        df2 = df.rename(columns={'Affecting parts of':'suburb','Reference':'oid','Status':'status','Reason':'reason','Customers':'otype','Streets':'street'},inplace=False)
+
+        ausgrid_data = df2.to_dict(orient='records')
         f = open(FILE_PATH, "w")
         f.write(f_content)
         f.close()
@@ -137,11 +146,19 @@ except Exception as e:
     error_msg += 'Unable to download file from source url: {0}'.format(data_table_url)
     logger.error('Error: {0}'.format(e))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='ausgrid', source_url=data_table_url, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='ausgrid', source_url=data_table_url, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='ausgrid', source_url=data_table_url, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_data(data=ausgrid_data,name='ausgrid')
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))
+
+

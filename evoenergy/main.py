@@ -2,7 +2,8 @@ import os
 from time import sleep
 import urllib.request
 from datetime import datetime
-
+import csv
+import pandas as pd
 import logging
 
 from fnmatch import fnmatch
@@ -79,11 +80,23 @@ if not os.path.isfile(DOWNLOAD_EVOENERGY_FILE_DESTINATION):
 else:
     print("Extract is already done for this date: {0}".format(FILE_NAME_FORMAT))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+with open(API_DOWNLOADS_DESINATION_FILE,'r') as f:
+    csv_reader = csv.DictReader(f)
+    df = pd.DataFrame(csv_reader)
+    df2 = df.rename(columns={'Outage Id':'oid','Type':'otype','Status Description':'status','Reason':'reason','Affected Suburbs':'suburb','Affected Customer Count':'affected_cust','Planned Start':'ostart_time','Planned Restoration':'o_res_time'})
+    evoenegy_data = df2.to_dict(orient='records')
+   
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications
+import connection
+
 
 if error == True:
-    notify(source_name='evoenergy', source_url=EVOENEGY_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='evoenergy', source_url=EVOENEGY_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='evoenergy', source_url=EVOENEGY_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_csv_data(data=evoenegy_data,name='evoenergy')
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))

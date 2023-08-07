@@ -29,10 +29,13 @@ ERGON_URL = 'https://www.ergon.com.au/network/outages-and-disruptions/power-outa
 API_DOWNLOADS_DESINATION = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/outages/ergon/'
 API_DOWNLOADS_DESINATION_FILE = API_DOWNLOADS_DESINATION + FILE_NAME_FORMAT + '.csv'
 
+SCREEN_SHORT = '/home/webstring-tushar/Documents/work/outage/outages/ergon/screenshort/'+ FILE_NAME_FORMAT + '.png'
+
+
+
 LOGS_FILE = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/logs/ergon.log'
 
-error = error_msg = ''
-
+error= error_msg =''
 logging.basicConfig(filename=LOGS_FILE,
                     filemode='a',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
@@ -70,30 +73,42 @@ if not os.path.exists(API_DOWNLOADS_DESINATION):
         logger.error("2ERR. Error creating API directory: {0}: {1}".format(API_DOWNLOADS_DESINATION, e))
 
 options = Options()
-options.add_argument("--headless")
+# options.add_argument("--headless")
 options.add_argument("--window-size=1920,1200")
 
 try:
     driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
     driver.get(ERGON_URL)
     driver.implicitly_wait(15)
-
     data_table = driver.find_elements(By.XPATH, '//ul[@class="results"]/child::li')
-    if len(data_table) > 0:
+    scree_short = driver.find_element(By.XPATH,'/html/body/div[2]/div[2]/div/div[2]/div/div[3]/ul')
+    scree_short.screenshot(SCREEN_SHORT)
+    if len(data_table) >= 0:
         outages = []
         columns = ['event_id','outage_type','area', 'num_of_customers_affected', 'reason', 'suburb(s)', 'street(s)', 'start_time','estimated_fix_time','status']
         for data in data_table:
             out = []
             try:
-                check_if_arrow_closed = data.find_element(By.CLASS_NAME, 'arrow-closed')
-                logger.info("hhhhhhhhhhhhhhhhh {0}".format(check_if_arrow_closed))
+                check_if_arrow_closed = data.find_element(By.XPATH, '/html/body/div[2]/div[2]/div/div[2]/div/div[3]/ul')
                 if check_if_arrow_closed:
                     check_if_arrow_closed.click()
             except Exception as e:
                 error = True
                 error_msg += 'Seems div is already open: {0}'.format(e)
                 logger.error("2ERR. Error because of div open: {0}".format(e))
-                
+
+            # div_data = driver.find_elements(By.XPATH,'//div[contains(@class, "outage-inside-container outage-inside-container")]')
+            # for index,check_data in enumerate(div_data):
+            #     print(index)
+            #     try:
+            #         if check_data:
+            #             check_data.click()
+            #             print(check_data.is_displayed())
+            #     except Exception as e:
+            #         error = True
+            #         error_msg += 'Seems div is already open: {0}'.format(e)
+            #         logger.error("2ERR. Error because of div open: {0}".format(e))
+        
             area_selector = data.find_element(By.CLASS_NAME, 'lga-heading-text')
             affected_customer_selector = data.find_element(By.CLASS_NAME, 'lga-customers-label')
             suburbs_and_streets_selector = data.find_elements(By.CLASS_NAME, 'suburb-and-street')
@@ -128,6 +143,9 @@ try:
         try:
             df = pd.DataFrame(outages, columns = columns)
             df.to_csv(DOWNLOAD_ERGON_FILE_DESTINATION, encoding='utf-8')
+            df2 = df.rename(columns={'event_id':"oid",'outage_type':'otype','num_of_customers_affected':'affected_cust','start_time':'ostart_time','estimated_fix_time':'o_res_time','suburb(s)':'suburb','street(s)':'street'})
+            df2.head()
+            ergon_data = df2.to_dict(orient='records')
             logger.info("Successfully written CSV file at destination: {0}".format(DOWNLOAD_ERGON_FILE_DESTINATION))
         except Exception as e:
             error = True
@@ -148,11 +166,22 @@ except Exception as e:
     error_msg += 'Couldn\'t scrape the data: {0}: {1}'.format(ERGON_URL, e)
     logger.error("Couldn't scrape the data: {0}: {1}".format(ERGON_URL, e))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='engon', source_url=ERGON_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+    notifications.send_email_notification_of_failure(source_name='ergon', source_url=ERGON_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
 else:
-    conn(source_name='ergon', source_url=ERGON_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    connection.extract_data(data=ergon_data,name='ergon')
+
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))
+
+
+
+
+

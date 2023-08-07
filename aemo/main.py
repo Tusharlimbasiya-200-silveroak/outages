@@ -6,6 +6,7 @@ from datetime import datetime
 from fnmatch import fnmatch
 import pandas as pd
 import logging
+import csv
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_FOLDER = ROOT_DIR + '/downloads/'
@@ -115,11 +116,24 @@ if len(os.listdir(EXTRACT_AEMO_FILE_DESTINATION)) == 0:
 else:
     logger.info("8a. Yikes! Extract is already done for this date: {0}".format(FILE_NAME_FORMAT))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+with open(API_DOWNLOADS_DESINATION_FILE,'r') as f:
+    csv_reader = csv.DictReader(f)
+    df = pd.DataFrame(csv_reader)
+    df['full_column'] = df['Equipment Name'] + df['TNSP Submitted the Outage'] + df['Start Time']
+    df2 = df.rename(columns={'Region':'region','Status':'status','Start Time':'ostart_time','End Time':'o_res_time','full_column':'oid'})
+    aemo_data = df2.to_dict(orient='records')
+   
+            
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='aemo', source_url=AEMO_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='aemo', source_url=AEMO_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='aemo', source_url=AEMO_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_csv_data(data=aemo_data,name='aemo')
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))

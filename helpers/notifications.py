@@ -17,9 +17,9 @@ logging.basicConfig(filename=LOGS_FILE,
 logger = logging.getLogger('connectionlogs')
 
 def send_email_notification_of_failure(source_name, source_url, extraction_date, error_msg):
-    sender_email = "virajthakrar997@gmail.com"
-    receiver_email = ["virajthakrar97@gmail.com","iot@senstra.com.au"]
-    password = "nxyhvdeovumptvfv"
+    sender_email = "tushar@webstring.technology"
+    receiver_email = ["tushar@webstring.technology","tusharlimbasiya200@gmail.com"]
+    password = "63541@TR"
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "{0} : Extraction Failed".format(source_name)

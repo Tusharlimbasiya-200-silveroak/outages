@@ -3,7 +3,8 @@ from datetime import datetime
 from time import sleep
 
 import pandas as pd
-
+from pymongo.mongo_client import MongoClient
+from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -27,6 +28,7 @@ API_DOWNLOADS_DESINATION = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/outage
 API_DOWNLOADS_DESINATION_FILE = API_DOWNLOADS_DESINATION + FILE_NAME_FORMAT + '.csv'
 
 LOGS_FILE = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/logs/westernpower.log'
+SCREEN_SHORT = '/home/webstring-tushar/Documents/work/outage/outages/westernpower/screenshort/'+ FILE_NAME_FORMAT + '.png'
 
 error = error_msg = ''
 
@@ -81,8 +83,8 @@ def check_if_element_exists(data, byxpath=None, byclass=None):
         return txt
     
 try:
-    options = Options()
-    options.add_argument("--headless")
+    options = uc.ChromeOptions()
+    # options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-extensions")
     options.add_argument('--disable-application-cache')
@@ -90,18 +92,25 @@ try:
     options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
-    driver = uc.Chrome(use_subprocess=True, options=options)
+    driver = uc.Chrome(options=options)
     driver.get(WESTERNPOWER_URL)
-    delay = 10
-    elem = WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'outage-list')))
+    driver.implicitly_wait(8)
+    delay =10
+    # elem = driver.find_element(By.XPATH,'/html/body/div[1]/main/div/div/div/div/div/div/div/div/div/div[1]/div/div[2]/div[1]').text
+    # elem.find_elements(By.XPATH,'/html/body/div[1]/main/div/div/div/div/div/div/div/div/div/div[1]/div/div[2]/div[1]')
+    elem = WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.XPATH,'/html/body')))
+    print("element{0}".format(elem.text))
     data_table = driver.find_elements(By.XPATH, '//div[@class="outage-list__outages"]/child::div')
+    print(data_table)
+    # srcreen_short = driver.find_element(By.XPATH,'//*[@id="main"]/div/div/div/div/div/div/div/div/div/div[1]/div/div[2]/div[1]')
+    # srcreen_short.screenshot(SCREEN_SHORT)
     if len(data_table) > 0:
         outages = []
         columns = ['outage_type', 'affected_suburbs', 'estimated_restoration_time', 'customers_affected', 'extra_information']
         for outage in data_table:
             print(outage)
             out = []
-            outage_type_text = check_if_element_exists(outage, byclass='outage-title')    
+            outage_type_text = check_if_element_exists(outage, byclass='outage-title').text
             affected_suburbs_text = check_if_element_exists(outage, byclass='outage-suburb-list')
             customers_affected_text = check_if_element_exists(outage, byclass='outage__customers')
             extra_information_text = check_if_element_exists(outage, byclass='outage__actions')
@@ -115,9 +124,16 @@ try:
                 estimated_restoration_time_text = check_time_description     
             out.extend([outage_type_text, affected_suburbs_text, estimated_restoration_time_text, customers_affected_text, extra_information_text])
             outages.append(out)
+            
         try:
+        
             df = pd.DataFrame(outages, columns = columns)
-            df.to_csv(DOWNLOAD_WESTERNPOWER_FILE_DESTINATION, encoding='utf-8')
+            print("df{0}".format(df))
+            df2 = df.rename(columns={'outage_type':'otype','affected_suburbs':'suburb','estimated_restoration_time':'o_res_time','customers_affected':'affected_cust','extra_information':'status'},inplace=False)
+            df2.head()
+            df2.to_csv(DOWNLOAD_WESTERNPOWER_FILE_DESTINATION, encoding='utf-8')
+            westernpower_data = df2.to_dict(orient='records')
+          
             logger.info("Successfully written extracted data to CSV: {0}".format(DOWNLOAD_WESTERNPOWER_FILE_DESTINATION))
         except Exception as e:
             error = True
@@ -139,11 +155,22 @@ except Exception as e:
     error_msg += 'Unable to extract data from the URL: {0}: {1}'.format(WESTERNPOWER_URL, e)
     logger.error("Unable to extract data from the URL: {0}: {1}".format(WESTERNPOWER_URL, e))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='westernpower', source_url=WESTERNPOWER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='westernpower', source_url=WESTERNPOWER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='westernpower', source_url=WESTERNPOWER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_data(data = westernpower_data ,name="Westernpower")
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))
+
+
+
+

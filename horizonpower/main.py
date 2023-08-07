@@ -27,6 +27,9 @@ HORIZONPOWER_URL = 'https://www.horizonpower.com.au/faults-outages/?q='
 API_DOWNLOADS_DESINATION = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/outages/horizonpower/'
 API_DOWNLOADS_DESINATION_FILE = API_DOWNLOADS_DESINATION + FILE_NAME_FORMAT + '.csv'
 
+SCREEN_SHORT = '/home/webstring-tushar/Documents/work/outage/outages/horizonpower/screenshort/'+ FILE_NAME_FORMAT + '.png'
+
+
 LOGS_FILE = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/logs/horizonpower.log'
 
 error = error_msg = ''
@@ -76,15 +79,21 @@ try:
     driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
     driver.get(HORIZONPOWER_URL)
     delay = 5
+    screen_short = driver.find_element(By.XPATH,'//*[@id="outages-list"]/table')
+    screen_short.screenshot(SCREEN_SHORT)
 
     elem = WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'list-outage-item')))
     data_table = driver.find_element(By.CLASS_NAME, 'outage-list__desktop')
     parsed_data = data_table.get_attribute('outerHTML')
     page_source_dfs = pd.read_html(parsed_data)
+    
 
     try:    
         for table in page_source_dfs:
             table.to_csv(DOWNLOAD_HORIZONPOWER_FILE_DESTINATION, encoding='utf-8')
+            df2 = table.rename(columns={'Status':'status','Affected area':'suburb','Start time':'ostart_time','Estimated restoration time':'o_res_time','Affected customers':'affected_cust','View on map':"street"},inplace=False)
+            df2.head()
+            horizonpower_data = df2.to_dict(orient='records')
         logger.info("Successfully written extracted data to CSV file: {0}".format(DOWNLOAD_HORIZONPOWER_FILE_DESTINATION))
     except Exception as e:
         error = True
@@ -102,11 +111,17 @@ except Exception as e:
     error_msg += 'Error while extracting data from url: {0}: {1}'.format(HORIZONPOWER_URL, e)
     logger.error("Error while extracting data from url: {0}: {1}".format(HORIZONPOWER_URL, e))
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='horizonpower', source_url=HORIZONPOWER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='horizonpower', source_url=HORIZONPOWER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='horizonpower', source_url=HORIZONPOWER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_data(data=horizonpower_data,name="horizonpower")
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))

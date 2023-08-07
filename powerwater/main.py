@@ -32,6 +32,9 @@ API_DOWNLOADS_DESINATION_FILE = API_DOWNLOADS_DESINATION + FILE_NAME_FORMAT + '.
 
 LOGS_FILE = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/logs/powerwater.log'
 
+SCREEN_SHORT = '/home/webstring-tushar/Documents/work/outage/outages/powerwater/screenshort/'+ FILE_NAME_FORMAT + '.png'
+
+
 error = error_msg = ''
 
 logging.basicConfig(filename=LOGS_FILE,
@@ -72,14 +75,25 @@ if not os.path.exists(API_DOWNLOADS_DESINATION):
 
 columns = ['title', 'outage_origin_detail', 'outage_origin_suburb', 'outage_details', 'outage_order_no', 'outage_order_start_date', 'outage_order_start_time','outage_order_end_date', 'outage_order_end_time']
 try:
+    options = Options()
+    # options.add_argument("--headless")
+    options.add_argument("--window-size=1920,1200")
+
+
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+    driver.get(POWERWATER_URL)
+    # driver.save_screenshot(SCREEN_SHORT)
+    screen_short = driver.find_element(By.XPATH,'//*[@id="main"]/div/div/div[3]/div[2]')
+    screen_short.screenshot(SCREEN_SHORT)
     parsed_data = requests.get(POWERWATER_URL).text
     parsed_data = BeautifulSoup(parsed_data, 'html.parser')
     useful_data_divs = parsed_data.find_all('div', attrs={'class': 'outages-list__item'})
     outages = []
     for outage in useful_data_divs:
         out = []
+      
         outage_type = outage.find('span', attrs={'class': 'outage-detail-supply-type'}).text
-        if outage_type and outage_type.lower() == 'power':   
+        if outage_type and outage_type.lower() == 'power':
             outage_title = outage.find('title').text
             outage_region_detail = outage.find('span', attrs={'class': 'outage-detail-region'}).text
             outage_region_suburb = outage.find('span', attrs={'class': 'outage-detail-suburb'}).text
@@ -91,9 +105,16 @@ try:
             outage_end_time = outage.find('div', attrs={'outages-list__cell-estimated-end'}).find('span', attrs={'class': 'outage-detail-time'}).text
             out.extend([outage_title, outage_region_detail, outage_region_suburb, outage_details, outage_order_no, outage_start_date, outage_start_time,outage_end_date, outage_end_time])
             outages.append(out)
+            # print(out)
+            
     try:
+        
         df = pd.DataFrame(outages, columns = columns)
-        df.to_csv(DOWNLOAD_POWERWATER_FILE_DESTINATION, encoding='utf-8')
+        print(df)
+        df2 = df.rename(columns={'title':'otype','outage_origin_detail':'street','outage_origin_suburb':'suburb','outage_details':'reason','outage_order_no':'oid','outage_order_start_time':'ostart_time','outage_order_end_time':'o_res_time'})
+        df2.to_csv(DOWNLOAD_POWERWATER_FILE_DESTINATION, encoding='utf-8')
+        df2.head()
+        powerwater_data = df2.to_dict(orient='records')
         logger.info("Successfully written the extracted data to CSV: {0}".format(DOWNLOAD_POWERWATER_FILE_DESTINATION))
     except Exception as e:
         error = True
@@ -112,12 +133,17 @@ except Exception as e:
     logger.error("Error extracting data from the URL: {0}: {1}".format(POWERWATER_URL, e))
     print("Table not loaded yet")
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='powerwater', source_url=POWERWATER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='powerwater', source_url=POWERWATER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='powerwater', source_url=POWERWATER_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_data(data=powerwater_data,name="powerwater")
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))
+
 

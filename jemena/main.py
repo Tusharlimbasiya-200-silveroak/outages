@@ -29,6 +29,9 @@ JEMENA_URL = 'https://jemena.com.au/outages-and-faults/electricity/planned'
 API_DOWNLOADS_DESINATION = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/outages/jemena/'
 API_DOWNLOADS_DESINATION_FILE = API_DOWNLOADS_DESINATION + FILE_NAME_FORMAT + '.csv'
 
+SCREEN_SHORT = '/home/webstring-tushar/Documents/work/outage/outages/jemena/screenshort/'+ FILE_NAME_FORMAT + '.png'
+
+
 LOGS_FILE = os.path.dirname(os.path.dirname(ROOT_DIR)) + '/logs/jemena.log'
 
 error = error_msg = None
@@ -70,7 +73,7 @@ if not os.path.exists(API_DOWNLOADS_DESINATION):
         logger.error("2ERR. Error creating API directory: {0}: {1}".format(API_DOWNLOADS_DESINATION, e))
 
 options = Options()
-options.add_argument("--headless")
+# options.add_argument("--headless")
 options.add_argument("--window-size=1920,1200")
 
 try:
@@ -79,8 +82,13 @@ try:
     delay = 10
 
     elem = WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.ID, 'table')))
+    # driver.save_screenshot(SCREEN_SHORT)
+    
     sleep(5)
     data_elements = driver.find_elements(By.CLASS_NAME, 'grouprow')
+
+
+    
     if len(data_elements) > 0:
         outages = []
         columns = ['type','suburb','street','date', 'day', 'time', 'status']
@@ -103,6 +111,8 @@ try:
         try:
             df = pd.DataFrame(outages, columns = columns)
             df.to_csv(DOWNLOAD_JEMENA_FILE_DESTINATION, header=columns, encoding='utf-8')
+            df2 = df.rename(columns={'type':'otype','suburb':'suburbs','day':'o_res_time'},inplace=False)
+            jemena_data = df2.to_dict(orient='records')
             driver.close()
             logger.info("Successfully written extracted data to CSV: {0}".format(DOWNLOAD_JEMENA_FILE_DESTINATION))
         except Exception as e:
@@ -120,17 +130,24 @@ try:
     else:
         logger.info("Looks like no data found for this source at the moment: {0}".format(JEMENA_URL))
         driver.close()
+    
 except Exception as e:
     error = True
     error_msg += 'Problem extracting data from URL: {0}: {1}'.format(JEMENA_URL, e)
     logger.error("Problem extracting data from URL: {0}: {1}".format(JEMENA_URL, e))
     driver.close()
 
-from helpers.notifications import send_email_notification_of_failure as notify
-from helpers.connection import add_extraction_source_details as conn
+
+
+import sys
+sys.path.append(r'/home/webstring-tushar/Documents/work/outage/outage-owl/helpers')
+
+import notifications 
+import connection
+
 
 if error == True:
-    notify(source_name='jemena', source_url=JEMENA_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
-else:
-    conn(source_name='jemena', source_url=JEMENA_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), success=True)
+    notifications.send_email_notification_of_failure(source_name='jemena', source_url=JEMENA_URL, extraction_date=datetime.today().strftime('%Y-%m-%d'), error_msg=error_msg)
+else :
+    connection.extract_data(data=jemena_data,name='jemena')
 logger.info("9a. ====={0} DONE=====\n".format(FILE_NAME_FORMAT))
